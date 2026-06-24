@@ -47,4 +47,7 @@ Pub/Sub auth uses standard `GOOGLE_APPLICATION_CREDENTIALS`.
 - **auth-service** — publisher (user login events)
 - **release-service** — publisher + consumer (HTTP forward to `activity-log-service`)
 
-See [../README.md](../README.md) for `go.mod` `replace` paths and deployment examples.
+## Roadmap
+
+See [PLAN.md](./PLAN.md) for the mTLS + gRPC migration plan (replace HTTP `POST /activity-logs` with an internal gRPC API).
+
