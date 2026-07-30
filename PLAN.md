@@ -122,11 +122,3 @@ sequenceDiagram
 | `pkg-activitylogmq` (this repo) | Broker factory, consumer handler, gRPC client |
 | `email-service` | Reference for proto layout and gRPC server patterns |
 | Monorepo `docker-compose.*.yml` | Internal DNS, cert mounts, env wiring |
-
-## References
-
-- [README.md](./README.md) — current API and environment variables
-- [messaging/activity_log.go](./messaging/activity_log.go) — queue consumer → HTTP
-- [clients/activity_log_client.go](./clients/activity_log_client.go) — HTTP client
-- `email-service/api/proto/notification.proto` — IlonaPay gRPC convention
-- Monorepo [docs/database-scheme.md](../../../docs/database-scheme.md) — `activity_log` table
