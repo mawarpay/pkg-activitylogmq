@@ -189,12 +189,19 @@ environment:
 ## Development
 
 ```bash
-go build ./...
-go vet ./...
-go test ./...
+make help          # list targets
+make check         # fmt-check + vet + build + test (race/cover) — matches CI unit steps
+make test          # go test ./... -race -cover
+make test-integration  # RabbitMQ + Kafka publish/subscribe (needs INTEGRATION=1)
+
+make docker-up     # start RabbitMQ (:5672, UI :15672 guest/guest)
+make docker-test   # build image and run go test ./... against Compose RabbitMQ
+make docker-down   # stop Compose services
 ```
 
-Unit tests use fakes and `httptest`; a live broker is not required.
+Unit tests use fakes and `httptest`; a live broker is not required for `make test`.
+CI starts RabbitMQ and Kafka service containers and runs `make test-integration`.
+`make docker-test` still brings up RabbitMQ so broker env vars match a real stack.
 
 ## Docs
 
@@ -203,10 +210,7 @@ Unit tests use fakes and `httptest`; a live broker is not required.
 
 ## Contributing
 
-1. Keep changes documentation-compatible with existing exported APIs unless a major version bump is intended.
-2. Add or update GoDoc and examples for any new exported symbol.
-3. Run `go test ./...` before opening a PR.
-4. Do not commit secrets, `.env` files, or PEMs.
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for setup, scope, API stability, and PR expectations.
 
 ## License
 
