@@ -1,0 +1,15 @@
+.git
+.cursor
+*.md
+!README.md
+LICENSE
+CONTRIBUTING.md
+PRD.md
+PLAN.md
+.doc.go.bak
+**/*_test.go.bak
+.idea
+.vscode
+*.swp
+*.env
+.env*

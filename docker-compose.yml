@@ -1,0 +1,32 @@
+services:
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    # Host ports are optional — see docker-compose.dev.yml / make docker-up.
+
+  test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      MESSAGE_BROKER: rabbitmq
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: "5672"
+      RABBITMQ_USER: guest
+      RABBITMQ_PASSWORD: guest
+      RABBITMQ_VHOST: /
+      ACTIVITY_LOG_QUEUE: activity-log.create
+      # Unit tests mock HTTP; leave unset unless you point at a real service.
+      # ACTIVITY_LOG_SERVICE_URL: http://activity-log-service:8080
+    command: ["go", "test", "./...", "-count=1"]
