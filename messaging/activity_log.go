@@ -10,8 +10,8 @@ import (
 	"github.com/ThreeDotsLabs/watermill"
 	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/turahe/pkg/logger"
-	activitylogmq "github.com/writdev-alt/pkg-activitylogmq"
-	"github.com/writdev-alt/pkg-activitylogmq/clients"
+	activitylogmq "github.com/mawarpay/pkg-activitylogmq"
+	"github.com/mawarpay/pkg-activitylogmq/clients"
 )
 
 var ErrNotConfigured = errors.New("activity log queue not configured")

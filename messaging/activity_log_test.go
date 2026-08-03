@@ -11,8 +11,8 @@ import (
 	"testing"
 
 	"github.com/ThreeDotsLabs/watermill/message"
-	activitylogmq "github.com/writdev-alt/pkg-activitylogmq"
-	"github.com/writdev-alt/pkg-activitylogmq/clients"
+	activitylogmq "github.com/mawarpay/pkg-activitylogmq"
+	"github.com/mawarpay/pkg-activitylogmq/clients"
 )
 
 func resetMessagingTestState(t *testing.T) {

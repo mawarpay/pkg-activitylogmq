@@ -1,6 +1,6 @@
 # PRD.md — pkg-activitylogmq
 
-Product requirements for `github.com/writdev-alt/pkg-activitylogmq`, the shared Go library that carries IlonaPay **activity-log (audit) events** from any microservice to `activity-log-service`.
+Product requirements for `github.com/mawarpay/pkg-activitylogmq`, the shared Go library that carries IlonaPay **activity-log (audit) events** from any microservice to `activity-log-service`.
 
 Scope: this library only. Persistence, query APIs, and retention live in `admin/activity-log-service`.
 

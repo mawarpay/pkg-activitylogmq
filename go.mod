@@ -1,4 +1,4 @@
-module github.com/writdev-alt/pkg-activitylogmq
+module github.com/mawarpay/pkg-activitylogmq
 
 go 1.26.0
 

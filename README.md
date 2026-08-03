@@ -1,4 +1,4 @@
-# github.com/writdev-alt/pkg-activitylogmq
+# github.com/mawarpay/pkg-activitylogmq
 
 ## Overview
 
@@ -37,13 +37,13 @@ Roadmap (gRPC + mTLS delivery): [PLAN.md](./PLAN.md). Requirements and known ris
 Requires **Go 1.26+**.
 
 ```bash
-go get github.com/writdev-alt/pkg-activitylogmq@latest
+go get github.com/mawarpay/pkg-activitylogmq@latest
 ```
 
 In an IlonaPay service `go.mod`:
 
 ```go
-require github.com/writdev-alt/pkg-activitylogmq vX.Y.Z
+require github.com/mawarpay/pkg-activitylogmq vX.Y.Z
 ```
 
 Wire at process startup:
@@ -52,8 +52,8 @@ Wire at process startup:
 import (
     "context"
 
-    "github.com/writdev-alt/pkg-activitylogmq/clients"
-    "github.com/writdev-alt/pkg-activitylogmq/messaging"
+    "github.com/mawarpay/pkg-activitylogmq/clients"
+    "github.com/mawarpay/pkg-activitylogmq/messaging"
 )
 
 func main() {
@@ -80,7 +80,7 @@ func main() {
 Low-level broker access (without the messaging package):
 
 ```go
-import activitylogmq "github.com/writdev-alt/pkg-activitylogmq"
+import activitylogmq "github.com/mawarpay/pkg-activitylogmq"
 
 cfg := activitylogmq.LoadConfig()
 if cfg.Enabled() {
