@@ -1,56 +1,50 @@
-# github.com/mawarpay/pkg-activitylogmq
+# pkg-activitylogmq
 
-## Overview
+[![Go Reference](https://pkg.go.dev/badge/github.com/mawarpay/pkg-activitylogmq.svg)](https://pkg.go.dev/github.com/mawarpay/pkg-activitylogmq)
 
 Shared Go library that carries IlonaPay **activity-log (audit) events** from any microservice to `activity-log-service`.
 
-Services enqueue JSON payloads with one call; [Watermill](https://watermill.io/) publishes them to a message broker; a consumer process forwards them over HTTP to `POST /activity-logs`. Supports **RabbitMQ**, **Google Cloud Pub/Sub**, and **Kafka** behind a single config surface.
+Services enqueue a JSON payload with one call; [Watermill](https://watermill.io/) publishes it to a message broker; a consumer process forwards it over HTTP to `POST /activity-logs`.
 
-```
+```text
 EnqueueActivityLogCreate → activity-log.create → handleActivityLogCreate → POST /activity-logs
 ```
 
-This package has no HTTP server and no database. Persistence and query APIs live in `admin/activity-log-service`.
+This module has no HTTP server and no database. Persistence and query APIs live in `activity-log-service`.
 
-| Package | Responsibility |
-|---------|----------------|
-| `activitylogmq` | Config + broker factory (`NewPublisher` / `NewSubscriber`) |
-| `messaging` | `Init`, `EnqueueActivityLogCreate`, consumer handler |
-| `clients` | `CreateBody` + HTTP client for `activity-log-service` |
+## Features
 
-## Goals
+- One-call publish via `messaging.EnqueueActivityLogCreate`
+- Broker-agnostic: **RabbitMQ**, **Google Cloud Pub/Sub**, and **Kafka**
+- Safe degradation when broker env is missing (host service keeps running)
+- Non-blocking audits — publish does not wait on `activity-log-service`
+- Shared `clients.CreateBody` payload across services
 
-| Goal | Notes |
-|------|-------|
-| One-call publish | `messaging.EnqueueActivityLogCreate` — no broker knowledge required |
-| Broker-agnostic | RabbitMQ, Pub/Sub, Kafka via `MESSAGE_BROKER` or auto-detect |
-| Safe degradation | Missing broker config warns and disables the queue; host service keeps running |
-| Non-blocking audits | Publish is async; business requests are not tied to log-service latency |
-| Shared payload shape | Single `clients.CreateBody` across all IlonaPay services |
+## Requirements
 
-Non-goals: reading or querying logs, owning the `activity_log` table, exposing routes, or replacing the broker with gRPC streaming.
-
-Roadmap (gRPC + mTLS delivery): [PLAN.md](./PLAN.md). Requirements and known risks: [PRD.md](./PRD.md).
+- Go **1.26+**
 
 ## Installation
-
-Requires **Go 1.26+**.
 
 ```bash
 go get github.com/mawarpay/pkg-activitylogmq@latest
 ```
 
-In an IlonaPay service `go.mod`:
-
-```go
-require github.com/mawarpay/pkg-activitylogmq vX.Y.Z
-```
-
-Wire at process startup:
-
 ```go
 import (
+    "github.com/mawarpay/pkg-activitylogmq/clients"
+    "github.com/mawarpay/pkg-activitylogmq/messaging"
+)
+```
+
+## Quick start
+
+```go
+package main
+
+import (
     "context"
+    "log"
 
     "github.com/mawarpay/pkg-activitylogmq/clients"
     "github.com/mawarpay/pkg-activitylogmq/messaging"
@@ -59,13 +53,11 @@ import (
 func main() {
     ctx := context.Background()
     if err := messaging.Init(ctx); err != nil {
-        // fatal only if broker wiring itself failed; missing config is not an error
-        log.Fatal(err)
+        log.Fatal(err) // only broker wiring failures; missing config returns nil
     }
     defer messaging.Close()
 
-    // elsewhere in a service method:
-    _ = messaging.EnqueueActivityLogCreate(ctx, clients.CreateBody{
+    err := messaging.EnqueueActivityLogCreate(ctx, clients.CreateBody{
         LogName:     "auth",
         Description: "User logged in",
         SubjectType: "User",
@@ -74,36 +66,47 @@ func main() {
         CauserType:  "User",
         CauserID:    42,
     })
+    if err != nil {
+        // typically log and continue — do not fail the business request
+        log.Printf("activity log enqueue: %v", err)
+    }
 }
 ```
 
-Low-level broker access (without the messaging package):
+Low-level broker factory (without the messaging package):
 
 ```go
 import activitylogmq "github.com/mawarpay/pkg-activitylogmq"
 
 cfg := activitylogmq.LoadConfig()
 if cfg.Enabled() {
-    pub, _ := activitylogmq.NewPublisher(cfg, logger)
-    sub, _ := activitylogmq.NewSubscriber(cfg, logger)
+    pub, err := activitylogmq.NewPublisher(cfg, nil)
+    // ...
+    sub, err := activitylogmq.NewSubscriber(cfg, nil)
+    // ...
 }
 ```
 
-| Function | Description |
-|----------|-------------|
-| `LoadConfig()` | Read broker + topic from environment |
-| `Config.Enabled()` | `true` when broker credentials are present |
-| `NewPublisher(cfg, logger)` | Watermill `message.Publisher` |
-| `NewSubscriber(cfg, logger)` | Watermill `message.Subscriber` |
-| `messaging.Init(ctx)` | Publisher + consumer + router (`sync.Once`) |
-| `messaging.EnqueueActivityLogCreate(ctx, body)` | Publish a create payload |
-| `messaging.Close()` | Shut down router, subscriber, publisher |
+## Package layout
 
-Verify locally:
-
-```bash
-go build ./... && go vet ./... && go test ./...
+```text
+.
+├── activitylogmq          # config + NewPublisher / NewSubscriber
+├── clients/               # CreateBody + HTTP client for activity-log-service
+├── messaging/             # Init, EnqueueActivityLogCreate, consumer handler
+├── LICENSE
+├── README.md
+├── PRD.md                 # product requirements and known risks
+└── PLAN.md                # gRPC + mTLS migration roadmap
 ```
+
+| Package | Import path | Role |
+|---------|-------------|------|
+| `activitylogmq` | `github.com/mawarpay/pkg-activitylogmq` | Config and Watermill broker factory |
+| `clients` | `.../clients` | `CreateBody` and HTTP `Create` |
+| `messaging` | `.../messaging` | Process-wide Init / enqueue / consumer |
+
+API reference: [pkg.go.dev/github.com/mawarpay/pkg-activitylogmq](https://pkg.go.dev/github.com/mawarpay/pkg-activitylogmq).
 
 ## Configuration
 
@@ -160,7 +163,7 @@ Auth uses standard `GOOGLE_APPLICATION_CREDENTIALS`.
 |----------|-------------|
 | `ACTIVITY_LOG_SERVICE_URL` | Base URL for `POST /activity-logs` (e.g. `http://activity-log-service:8080`) |
 
-Read once at package init into `clients.ActivityLog`. Consumers without this URL ACK and drop messages they receive.
+Read once at package init into `clients.ActivityLog`. Consumers without this URL acknowledge and drop messages they receive.
 
 > `messaging.Init` starts a publisher **and** a consumer. Every service that calls `Init` binds the same durable queue `activity-log.create` and they compete for deliveries. See [PRD.md](./PRD.md) §6.
 
@@ -176,13 +179,35 @@ environment:
   ACTIVITY_LOG_SERVICE_URL: http://activity-log-service:8080
 ```
 
-## Consumers in the monorepo
+## Design philosophy
 
-Services importing `messaging` and calling `Init`:
+- Prefer async enqueue over synchronous HTTP on the request path.
+- Fail open for configuration gaps; fail closed only on explicit wiring errors from Init.
+- Keep this module a library — no routes, servers, or schema ownership.
+- Share one payload type (`CreateBody`) so producers and the log service stay aligned.
 
-`auth-service`, `admin/admin-service`, `admin/admin-user-service`, `admin/admin-bank-service`, `admin/admin-merchant-service`, `admin/admin-wallet-service`, `admin/setting-service`, `admin/notification-service`, `admin/transaction-export-service`, `admin/release-service`, `user/user-service`, `user/merchant-service`, `user/wallet-service`.
+## Development
+
+```bash
+go build ./...
+go vet ./...
+go test ./...
+```
+
+Unit tests use fakes and `httptest`; a live broker is not required.
 
 ## Docs
 
 - [PRD.md](./PRD.md) — requirements, config surface, known risks
 - [PLAN.md](./PLAN.md) — mTLS + gRPC migration plan
+
+## Contributing
+
+1. Keep changes documentation-compatible with existing exported APIs unless a major version bump is intended.
+2. Add or update GoDoc and examples for any new exported symbol.
+3. Run `go test ./...` before opening a PR.
+4. Do not commit secrets, `.env` files, or PEMs.
+
+## License
+
+[MIT](./LICENSE) © 2026 mawarpay

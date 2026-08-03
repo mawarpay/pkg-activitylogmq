@@ -10,7 +10,16 @@ import (
 	"github.com/ThreeDotsLabs/watermill/message"
 )
 
-// NewPublisher creates a Watermill publisher for the configured broker.
+// NewPublisher creates a Watermill [message.Publisher] for the broker described
+// by cfg.
+//
+// cfg must be [Config.Enabled]; otherwise an error is returned and no
+// connection is attempted. A nil logger is replaced with Watermill's standard
+// logger.
+//
+// The returned publisher dials the broker and must be closed by the caller
+// when it is no longer needed. Errors wrapping dial or configuration failures
+// are returned as-is from the underlying Watermill adapter.
 func NewPublisher(cfg Config, logger watermill.LoggerAdapter) (message.Publisher, error) {
 	if !cfg.Enabled() {
 		return nil, fmt.Errorf("activitylogmq: broker %q is not configured", cfg.Broker)
@@ -36,7 +45,16 @@ func NewPublisher(cfg Config, logger watermill.LoggerAdapter) (message.Publisher
 	}
 }
 
-// NewSubscriber creates a Watermill subscriber for the configured broker.
+// NewSubscriber creates a Watermill [message.Subscriber] for the broker
+// described by cfg.
+//
+// cfg must be [Config.Enabled]; otherwise an error is returned and no
+// connection is attempted. A nil logger is replaced with Watermill's standard
+// logger.
+//
+// For RabbitMQ, the queue name equals the topic (durable queue topology). For
+// Kafka, cfg.KafkaConsumerGroup is used. The returned subscriber must be closed
+// by the caller when finished.
 func NewSubscriber(cfg Config, logger watermill.LoggerAdapter) (message.Subscriber, error) {
 	if !cfg.Enabled() {
 		return nil, fmt.Errorf("activitylogmq: broker %q is not configured", cfg.Broker)

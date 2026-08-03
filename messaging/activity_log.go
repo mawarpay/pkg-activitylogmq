@@ -9,11 +9,13 @@ import (
 
 	"github.com/ThreeDotsLabs/watermill"
 	"github.com/ThreeDotsLabs/watermill/message"
-	"github.com/turahe/pkg/logger"
 	activitylogmq "github.com/mawarpay/pkg-activitylogmq"
 	"github.com/mawarpay/pkg-activitylogmq/clients"
+	"github.com/turahe/pkg/logger"
 )
 
+// ErrNotConfigured is returned by [EnqueueActivityLogCreate] when [Init] has
+// not established a publisher (broker disabled or Init never called).
 var ErrNotConfigured = errors.New("activity log queue not configured")
 
 var (
@@ -24,7 +26,17 @@ var (
 	initOnce   sync.Once
 )
 
-// Init connects to the message broker, starts the activity-log HTTP consumer, and enables publishing.
+// Init loads broker configuration, opens a Watermill publisher and subscriber,
+// and starts a background router that forwards activity-log.create messages to
+// activity-log-service over HTTP.
+//
+// Init is safe to call concurrently and runs at most once per process
+// (sync.Once). If no broker is configured, Init logs a warning and returns
+// nil; the host service should continue. Partial construction failures close
+// already-opened publisher or subscriber resources before returning an error.
+//
+// The provided ctx cancels the background router when done; callers should
+// still invoke [Close] for an orderly shutdown.
 func Init(ctx context.Context) error {
 	var initErr error
 	initOnce.Do(func() {
@@ -82,7 +94,13 @@ func initMessaging(ctx context.Context) error {
 	return nil
 }
 
-// Close shuts down the Watermill router, subscriber, and publisher.
+// Close shuts down the Watermill router, subscriber, and publisher started by
+// [Init]. It is safe to call when Init was never called or the broker was
+// disabled; in those cases Close is a no-op and returns nil.
+//
+// The first close error encountered is returned. Close does not reset the
+// sync.Once used by Init, so Init cannot be re-run after Close in the same
+// process.
 func Close() error {
 	var err error
 	if router != nil {
@@ -103,7 +121,16 @@ func Close() error {
 	return err
 }
 
-// EnqueueActivityLogCreate publishes an activity-log create payload for async HTTP delivery.
+// EnqueueActivityLogCreate publishes body as JSON to the configured
+// activity-log topic for asynchronous delivery to activity-log-service.
+//
+// It returns [ErrNotConfigured] when no publisher is available (broker
+// disabled or Init not called). Marshal and publish failures are wrapped and
+// returned; callers typically log and continue so business requests are not
+// blocked by audit delivery.
+//
+// Publishing is fire-and-forget relative to activity-log-service: Enqueue does
+// not wait for the HTTP forwarder to complete.
 func EnqueueActivityLogCreate(ctx context.Context, body clients.CreateBody) error {
 	log := logger.WithContext(ctx)
 	if publisher == nil {

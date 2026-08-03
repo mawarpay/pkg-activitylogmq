@@ -9,26 +9,58 @@ import (
 
 const defaultTopic = "activity-log.create"
 
-// Broker identifies the message transport.
+// Broker identifies the message transport selected by [LoadConfig].
 type Broker string
 
 const (
+	// BrokerRabbitMQ selects RabbitMQ / AMQP. Aliases for MESSAGE_BROKER:
+	// "rabbitmq", "amqp", "rabbit".
 	BrokerRabbitMQ Broker = "rabbitmq"
-	BrokerPubSub   Broker = "pubsub"
-	BrokerKafka    Broker = "kafka"
+
+	// BrokerPubSub selects Google Cloud Pub/Sub. Aliases for MESSAGE_BROKER:
+	// "pubsub", "google", "gcp", "google_pubsub".
+	BrokerPubSub Broker = "pubsub"
+
+	// BrokerKafka selects Apache Kafka.
+	BrokerKafka Broker = "kafka"
 )
 
-// Config holds broker connection settings loaded from the environment.
+// Config holds broker connection settings loaded from the environment by
+// [LoadConfig]. Pass an Enabled config to [NewPublisher] or [NewSubscriber].
 type Config struct {
-	Broker             Broker
-	Topic              string
-	RabbitMQURI        string
-	PubSubProjectID    string
-	KafkaBrokers       []string
+	// Broker is the selected transport. Empty when no broker could be detected.
+	Broker Broker
+
+	// Topic is the queue or topic name used for publish and subscribe.
+	// Defaults to "activity-log.create" when no topic env var is set.
+	Topic string
+
+	// RabbitMQURI is the AMQP connection URI when Broker is BrokerRabbitMQ.
+	RabbitMQURI string
+
+	// PubSubProjectID is the GCP project ID when Broker is BrokerPubSub.
+	PubSubProjectID string
+
+	// KafkaBrokers is the list of Kafka bootstrap addresses when Broker is
+	// BrokerKafka.
+	KafkaBrokers []string
+
+	// KafkaConsumerGroup is the consumer group for Kafka subscribers.
+	// Defaults to "activity-log-consumer".
 	KafkaConsumerGroup string
 }
 
-// LoadConfig reads MESSAGE_BROKER (or auto-detect) and broker-specific env vars.
+// LoadConfig reads MESSAGE_BROKER (or auto-detects the broker) and
+// broker-specific environment variables into a [Config].
+//
+// Topic resolution order: ACTIVITY_LOG_QUEUE, ACTIVITY_LOG_TOPIC,
+// PUBSUB_TOPIC, KAFKA_TOPIC, then "activity-log.create".
+//
+// Broker auto-detect order when MESSAGE_BROKER is unset: RabbitMQ URI present,
+// then PUBSUB_PROJECT_ID, then KAFKA_BROKERS.
+//
+// LoadConfig never returns an error; call [Config.Enabled] to determine whether
+// publishing and subscribing can proceed.
 func LoadConfig() Config {
 	cfg := Config{Topic: topicFromEnv()}
 	cfg.Broker = brokerFromEnv(cfg)
@@ -44,7 +76,9 @@ func LoadConfig() Config {
 	return cfg
 }
 
-// Enabled reports whether a broker and required settings are present.
+// Enabled reports whether Broker is set and the corresponding connection
+// settings are present (RabbitMQ URI, Pub/Sub project ID, or Kafka brokers).
+// A disabled config must not be passed to [NewPublisher] or [NewSubscriber].
 func (c Config) Enabled() bool {
 	switch c.Broker {
 	case BrokerRabbitMQ:
