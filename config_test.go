@@ -16,6 +16,20 @@ func clearBrokerEnv(t *testing.T) {
 		"RABBITMQ_PASSWORD",
 		"RABBITMQ_PORT",
 		"RABBITMQ_VHOST",
+		"AMAZONMQ_URL",
+		"AMAZON_MQ_URL",
+		"AMAZONMQ_HOST",
+		"AMAZON_MQ_HOST",
+		"AMAZONMQ_USER",
+		"AMAZON_MQ_USER",
+		"AMAZONMQ_PASSWORD",
+		"AMAZON_MQ_PASSWORD",
+		"AMAZONMQ_PORT",
+		"AMAZON_MQ_PORT",
+		"AMAZONMQ_VHOST",
+		"AMAZON_MQ_VHOST",
+		"AMAZONMQ_TLS",
+		"AMAZON_MQ_TLS",
 		"PUBSUB_PROJECT_ID",
 		"KAFKA_BROKERS",
 		"KAFKA_CONSUMER_GROUP",
@@ -144,6 +158,25 @@ func TestLoadConfig_BrokerSelection(t *testing.T) {
 			enabled: true,
 		},
 		{
+			name: "explicit amazonmq",
+			set: func(t *testing.T) {
+				t.Setenv("MESSAGE_BROKER", "amazonmq")
+				t.Setenv("AMAZONMQ_URL", "amqps://user:pass@mq.example:5671/")
+			},
+			want:    BrokerAmazonMQ,
+			enabled: true,
+		},
+		{
+			name: "auto-detect amazonmq from host",
+			set: func(t *testing.T) {
+				t.Setenv("AMAZONMQ_HOST", "b-xxx.mq.us-east-1.amazonaws.com")
+				t.Setenv("AMAZONMQ_USER", "mquser")
+				t.Setenv("AMAZONMQ_PASSWORD", "secret")
+			},
+			want:    BrokerAmazonMQ,
+			enabled: true,
+		},
+		{
 			name: "kafka consumer group default",
 			set: func(t *testing.T) {
 				t.Setenv("MESSAGE_BROKER", "kafka")
@@ -258,6 +291,77 @@ func TestLoadConfig_KafkaBrokersAndConsumerGroup(t *testing.T) {
 	}
 }
 
+func TestLoadConfig_AmazonMQURI(t *testing.T) {
+	tests := []struct {
+		name string
+		set  func(t *testing.T)
+		want string
+	}{
+		{
+			name: "full url",
+			set: func(t *testing.T) {
+				t.Setenv("MESSAGE_BROKER", "amazonmq")
+				t.Setenv("AMAZONMQ_URL", "amqps://user:pass@b-xxx.mq.us-east-1.amazonaws.com:5671/")
+			},
+			want: "amqps://user:pass@b-xxx.mq.us-east-1.amazonaws.com:5671/",
+		},
+		{
+			name: "amazon_mq_url alias",
+			set: func(t *testing.T) {
+				t.Setenv("MESSAGE_BROKER", "amazon_mq")
+				t.Setenv("AMAZON_MQ_URL", "amqps://user:pass@broker:5671/vhost")
+			},
+			want: "amqps://user:pass@broker:5671/vhost",
+		},
+		{
+			name: "host defaults to amqps 5671",
+			set: func(t *testing.T) {
+				t.Setenv("MESSAGE_BROKER", "amazonmq")
+				t.Setenv("AMAZONMQ_HOST", "b-xxx.mq.us-east-1.amazonaws.com")
+				t.Setenv("AMAZONMQ_USER", "mquser")
+				t.Setenv("AMAZONMQ_PASSWORD", "p@ss")
+			},
+			want: "amqps://mquser:p%40ss@b-xxx.mq.us-east-1.amazonaws.com:5671/",
+		},
+		{
+			name: "tls disabled uses amqp 5672",
+			set: func(t *testing.T) {
+				t.Setenv("MESSAGE_BROKER", "amazonmq")
+				t.Setenv("AMAZONMQ_HOST", "localhost")
+				t.Setenv("AMAZONMQ_TLS", "false")
+			},
+			want: "amqp://guest:guest@localhost:5672/",
+		},
+		{
+			name: "custom vhost",
+			set: func(t *testing.T) {
+				t.Setenv("MESSAGE_BROKER", "amq")
+				t.Setenv("AMAZONMQ_HOST", "broker.example")
+				t.Setenv("AMAZONMQ_VHOST", "/ilonapay")
+			},
+			want: "amqps://guest:guest@broker.example:5671/ilonapay",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			clearBrokerEnv(t)
+			tt.set(t)
+
+			cfg := LoadConfig()
+			if cfg.Broker != BrokerAmazonMQ {
+				t.Fatalf("broker = %q, want %q", cfg.Broker, BrokerAmazonMQ)
+			}
+			if cfg.RabbitMQURI != tt.want {
+				t.Fatalf("RabbitMQURI = %q, want %q", cfg.RabbitMQURI, tt.want)
+			}
+			if !cfg.Enabled() {
+				t.Fatal("expected enabled amazonmq config")
+			}
+		})
+	}
+}
+
 func TestNormalizeBroker(t *testing.T) {
 	tests := []struct {
 		in   string
@@ -265,6 +369,10 @@ func TestNormalizeBroker(t *testing.T) {
 	}{
 		{"rabbitmq", BrokerRabbitMQ},
 		{"AMQP", BrokerRabbitMQ},
+		{"amazonmq", BrokerAmazonMQ},
+		{"amazon_mq", BrokerAmazonMQ},
+		{"amazon-mq", BrokerAmazonMQ},
+		{"amq", BrokerAmazonMQ},
 		{"pubsub", BrokerPubSub},
 		{"google", BrokerPubSub},
 		{"kafka", BrokerKafka},
@@ -292,6 +400,16 @@ func TestConfig_Enabled(t *testing.T) {
 		{
 			name: "rabbitmq missing uri",
 			cfg:  Config{Broker: BrokerRabbitMQ},
+			want: false,
+		},
+		{
+			name: "amazonmq configured",
+			cfg:  Config{Broker: BrokerAmazonMQ, RabbitMQURI: "amqps://broker:5671/"},
+			want: true,
+		},
+		{
+			name: "amazonmq missing uri",
+			cfg:  Config{Broker: BrokerAmazonMQ},
 			want: false,
 		},
 		{

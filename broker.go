@@ -29,7 +29,7 @@ func NewPublisher(cfg Config, logger watermill.LoggerAdapter) (message.Publisher
 	}
 
 	switch cfg.Broker {
-	case BrokerRabbitMQ:
+	case BrokerRabbitMQ, BrokerAmazonMQ:
 		return amqp.NewPublisher(amqp.NewDurableQueueConfig(cfg.RabbitMQURI), logger)
 	case BrokerPubSub:
 		return googlecloud.NewPublisher(googlecloud.PublisherConfig{
@@ -52,9 +52,9 @@ func NewPublisher(cfg Config, logger watermill.LoggerAdapter) (message.Publisher
 // connection is attempted. A nil logger is replaced with Watermill's standard
 // logger.
 //
-// For RabbitMQ, the queue name equals the topic (durable queue topology). For
-// Kafka, cfg.KafkaConsumerGroup is used. The returned subscriber must be closed
-// by the caller when finished.
+// For RabbitMQ and Amazon MQ, the queue name equals the topic (durable queue
+// topology). For Kafka, cfg.KafkaConsumerGroup is used. The returned subscriber
+// must be closed by the caller when finished.
 func NewSubscriber(cfg Config, logger watermill.LoggerAdapter) (message.Subscriber, error) {
 	if !cfg.Enabled() {
 		return nil, fmt.Errorf("activitylogmq: broker %q is not configured", cfg.Broker)
@@ -64,7 +64,7 @@ func NewSubscriber(cfg Config, logger watermill.LoggerAdapter) (message.Subscrib
 	}
 
 	switch cfg.Broker {
-	case BrokerRabbitMQ:
+	case BrokerRabbitMQ, BrokerAmazonMQ:
 		return amqp.NewSubscriber(amqp.NewDurableQueueConfig(cfg.RabbitMQURI), logger)
 	case BrokerPubSub:
 		return googlecloud.NewSubscriber(googlecloud.SubscriberConfig{

@@ -25,6 +25,16 @@ func TestNewSubscriber_Disabled(t *testing.T) {
 	}
 }
 
+func TestNewPublisher_AmazonMQDisabled(t *testing.T) {
+	_, err := NewPublisher(Config{Broker: BrokerAmazonMQ}, nil)
+	if err == nil {
+		t.Fatal("expected error for disabled amazonmq config")
+	}
+	if !strings.Contains(err.Error(), `broker "amazonmq" is not configured`) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestNewPublisher_UnknownBrokerNotEnabled(t *testing.T) {
 	_, err := NewPublisher(Config{
 		Broker:      Broker("redis"),

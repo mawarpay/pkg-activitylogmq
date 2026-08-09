@@ -17,6 +17,11 @@ const (
 	// "rabbitmq", "amqp", "rabbit".
 	BrokerRabbitMQ Broker = "rabbitmq"
 
+	// BrokerAmazonMQ selects Amazon MQ for RabbitMQ over AMQPS (TLS).
+	// It reuses the Watermill AMQP adapter with an amqps:// URI.
+	// Aliases for MESSAGE_BROKER: "amazonmq", "amazon_mq", "amazon-mq", "amq".
+	BrokerAmazonMQ Broker = "amazonmq"
+
 	// BrokerPubSub selects Google Cloud Pub/Sub. Aliases for MESSAGE_BROKER:
 	// "pubsub", "google", "gcp", "google_pubsub".
 	BrokerPubSub Broker = "pubsub"
@@ -35,7 +40,8 @@ type Config struct {
 	// Defaults to "activity-log.create" when no topic env var is set.
 	Topic string
 
-	// RabbitMQURI is the AMQP connection URI when Broker is BrokerRabbitMQ.
+	// RabbitMQURI is the AMQP/AMQPS connection URI when Broker is
+	// BrokerRabbitMQ or BrokerAmazonMQ.
 	RabbitMQURI string
 
 	// PubSubProjectID is the GCP project ID when Broker is BrokerPubSub.
@@ -57,7 +63,7 @@ type Config struct {
 // PUBSUB_TOPIC, KAFKA_TOPIC, then "activity-log.create".
 //
 // Broker auto-detect order when MESSAGE_BROKER is unset: RabbitMQ URI present,
-// then PUBSUB_PROJECT_ID, then KAFKA_BROKERS.
+// then PUBSUB_PROJECT_ID, then KAFKA_BROKERS, then Amazon MQ URI/host.
 //
 // LoadConfig never returns an error; call [Config.Enabled] to determine whether
 // publishing and subscribing can proceed.
@@ -67,6 +73,8 @@ func LoadConfig() Config {
 	switch cfg.Broker {
 	case BrokerRabbitMQ:
 		cfg.RabbitMQURI = rabbitMQURI()
+	case BrokerAmazonMQ:
+		cfg.RabbitMQURI = amazonMQURI()
 	case BrokerPubSub:
 		cfg.PubSubProjectID = strings.TrimSpace(os.Getenv("PUBSUB_PROJECT_ID"))
 	case BrokerKafka:
@@ -77,11 +85,11 @@ func LoadConfig() Config {
 }
 
 // Enabled reports whether Broker is set and the corresponding connection
-// settings are present (RabbitMQ URI, Pub/Sub project ID, or Kafka brokers).
+// settings are present (AMQP URI, Pub/Sub project ID, or Kafka brokers).
 // A disabled config must not be passed to [NewPublisher] or [NewSubscriber].
 func (c Config) Enabled() bool {
 	switch c.Broker {
-	case BrokerRabbitMQ:
+	case BrokerRabbitMQ, BrokerAmazonMQ:
 		return c.RabbitMQURI != ""
 	case BrokerPubSub:
 		return c.PubSubProjectID != ""
@@ -121,6 +129,9 @@ func brokerFromEnv(cfg Config) Broker {
 	if strings.TrimSpace(os.Getenv("KAFKA_BROKERS")) != "" {
 		return BrokerKafka
 	}
+	if amazonMQURI() != "" {
+		return BrokerAmazonMQ
+	}
 	return ""
 }
 
@@ -128,6 +139,8 @@ func normalizeBroker(raw string) Broker {
 	switch strings.ToLower(strings.TrimSpace(raw)) {
 	case "rabbitmq", "amqp", "rabbit":
 		return BrokerRabbitMQ
+	case "amazonmq", "amazon_mq", "amazon-mq", "amq":
+		return BrokerAmazonMQ
 	case "pubsub", "google", "gcp", "google_pubsub":
 		return BrokerPubSub
 	case "kafka":
@@ -149,12 +162,72 @@ func rabbitMQURI() string {
 	pass := envOr("RABBITMQ_PASSWORD", "guest")
 	port := envOr("RABBITMQ_PORT", "5672")
 	vhost := strings.TrimSpace(os.Getenv("RABBITMQ_VHOST"))
-	if vhost == "" || vhost == "/" {
-		return fmt.Sprintf("amqp://%s:%s@%s:%s/",
-			url.QueryEscape(user), url.QueryEscape(pass), host, port)
+	return buildAMQPURI("amqp", user, pass, host, port, vhost)
+}
+
+// amazonMQURI builds an AMQPS (TLS) connection URI for Amazon MQ for RabbitMQ.
+//
+// Precedence: AMAZONMQ_URL (or AMAZON_MQ_URL), else host-based vars.
+// TLS is on by default (amqps://, port 5671). Set AMAZONMQ_TLS=false to use
+// plain amqp:// (local/dev only).
+func amazonMQURI() string {
+	if u := firstNonEmptyEnv("AMAZONMQ_URL", "AMAZON_MQ_URL"); u != "" {
+		return u
 	}
-	return fmt.Sprintf("amqp://%s:%s@%s:%s/%s",
-		url.QueryEscape(user), url.QueryEscape(pass), host, port, url.PathEscape(strings.TrimPrefix(vhost, "/")))
+	host := firstNonEmptyEnv("AMAZONMQ_HOST", "AMAZON_MQ_HOST")
+	if host == "" {
+		return ""
+	}
+	user := firstNonEmptyEnv("AMAZONMQ_USER", "AMAZON_MQ_USER")
+	if user == "" {
+		user = "guest"
+	}
+	pass := firstNonEmptyEnv("AMAZONMQ_PASSWORD", "AMAZON_MQ_PASSWORD")
+	if pass == "" {
+		pass = "guest"
+	}
+	scheme := "amqps"
+	defaultPort := "5671"
+	if !envBoolDefaultTrue(firstNonEmptyEnv("AMAZONMQ_TLS", "AMAZON_MQ_TLS")) {
+		scheme = "amqp"
+		defaultPort = "5672"
+	}
+	port := firstNonEmptyEnv("AMAZONMQ_PORT", "AMAZON_MQ_PORT")
+	if port == "" {
+		port = defaultPort
+	}
+	vhost := firstNonEmptyEnv("AMAZONMQ_VHOST", "AMAZON_MQ_VHOST")
+	return buildAMQPURI(scheme, user, pass, host, port, vhost)
+}
+
+func buildAMQPURI(scheme, user, pass, host, port, vhost string) string {
+	if vhost == "" || vhost == "/" {
+		return fmt.Sprintf("%s://%s:%s@%s:%s/",
+			scheme, url.QueryEscape(user), url.QueryEscape(pass), host, port)
+	}
+	return fmt.Sprintf("%s://%s:%s@%s:%s/%s",
+		scheme, url.QueryEscape(user), url.QueryEscape(pass), host, port,
+		url.PathEscape(strings.TrimPrefix(vhost, "/")))
+}
+
+func firstNonEmptyEnv(keys ...string) string {
+	for _, key := range keys {
+		if v := strings.TrimSpace(os.Getenv(key)); v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+// envBoolDefaultTrue parses an env value as a boolean. Empty or unrecognized
+// values default to true (safe for Amazon MQ TLS).
+func envBoolDefaultTrue(raw string) bool {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "0", "false", "no", "off":
+		return false
+	default:
+		return true
+	}
 }
 
 func splitCSV(raw string) []string {

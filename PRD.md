@@ -19,7 +19,7 @@ This package exists so a service can emit an audit event with **one function cal
 | # | Goal | Status |
 |---|------|--------|
 | G1 | One-call publish API for audit events | Met — `messaging.EnqueueActivityLogCreate` |
-| G2 | Broker-agnostic: RabbitMQ, Pub/Sub, Kafka behind one config surface | Met — `broker.go` |
+| G2 | Broker-agnostic: RabbitMQ, Amazon MQ (AMQPS), Pub/Sub, Kafka behind one config surface | Met — `broker.go` |
 | G3 | Zero-config degradation: no broker configured must not crash the host service | Met — `Init` warns and returns `nil` |
 | G4 | Audit writes never block or fail the business request | Met — publish is async, errors returned but callers log-and-continue |
 | G5 | Single source of the audit payload shape across all services | Met — `clients.CreateBody` |
@@ -56,7 +56,7 @@ EnqueueActivityLogCreate  ──────► activity-log.create  ───�
 
 | Path | Responsibility |
 |------|----------------|
-| `config.go` | `LoadConfig()` — read `MESSAGE_BROKER` or auto-detect; build RabbitMQ URI; `Config.Enabled()` |
+| `config.go` | `LoadConfig()` — read `MESSAGE_BROKER` or auto-detect; build RabbitMQ / Amazon MQ URI; `Config.Enabled()` |
 | `broker.go` | `NewPublisher` / `NewSubscriber` — Watermill adapters for AMQP, Pub/Sub, Kafka |
 | `messaging/activity_log.go` | `Init`, `Close`, `EnqueueActivityLogCreate`, `handleActivityLogCreate` |
 | `clients/activity_log_client.go` | `ActivityLogClient.Create` — `POST {ACTIVITY_LOG_SERVICE_URL}/activity-logs` |
@@ -88,22 +88,24 @@ messaging.Close()
 | B5 | `ACTIVITY_LOG_SERVICE_URL` unset in consumer → log and ACK | `handleActivityLogCreate` |
 | B6 | Non-2xx from log service → return error so Watermill **NACKs** and retries | `handleActivityLogCreate` |
 | B7 | Partial `Init` failure closes already-opened publisher/subscriber | `initMessaging` |
-| B8 | RabbitMQ credentials are URL-escaped when building the AMQP URI | `rabbitMQURI` |
+| B8 | RabbitMQ / Amazon MQ credentials are URL-escaped when building the AMQP(S) URI | `rabbitMQURI`, `amazonMQURI` |
 
 ### Configuration surface
 
 | Variable | Default | Notes |
 |----------|---------|-------|
-| `MESSAGE_BROKER` | auto-detect | `rabbitmq`\|`amqp`\|`rabbit`, `pubsub`\|`google`\|`gcp`, `kafka` |
+| `MESSAGE_BROKER` | auto-detect | `rabbitmq`\|`amqp`\|`rabbit`, `amazonmq`\|`amazon_mq`\|`amq`, `pubsub`\|`google`\|`gcp`, `kafka` |
 | `ACTIVITY_LOG_QUEUE` | `activity-log.create` | Then `ACTIVITY_LOG_TOPIC`, `PUBSUB_TOPIC`, `KAFKA_TOPIC` |
 | `RABBITMQ_URL` | — | Wins over host-based vars |
 | `RABBITMQ_HOST` / `_PORT` / `_USER` / `_PASSWORD` / `_VHOST` | — / `5672` / `guest` / `guest` / `/` | URI built only when host is set |
+| `AMAZONMQ_URL` | — | Full `amqps://` URI (aliases `AMAZON_MQ_*`) |
+| `AMAZONMQ_HOST` / `_PORT` / `_USER` / `_PASSWORD` / `_VHOST` / `_TLS` | — / `5671` / `guest` / `guest` / `/` / `true` | AMQPS by default |
 | `PUBSUB_PROJECT_ID` | — | Auth via `GOOGLE_APPLICATION_CREDENTIALS` |
 | `KAFKA_BROKERS` | — | Comma-separated |
 | `KAFKA_CONSUMER_GROUP` | `activity-log-consumer` | |
 | `ACTIVITY_LOG_SERVICE_URL` | — | Consumer-side HTTP target; **read once at package init** |
 
-Auto-detection order when `MESSAGE_BROKER` is unset: RabbitMQ URI → `PUBSUB_PROJECT_ID` → `KAFKA_BROKERS`.
+Auto-detection order when `MESSAGE_BROKER` is unset: RabbitMQ URI → `PUBSUB_PROJECT_ID` → `KAFKA_BROKERS` → Amazon MQ URI/host.
 
 ## 5. Consumers in the monorepo
 

@@ -32,6 +32,10 @@ func clearBrokerEnv(t *testing.T) {
 		"ACTIVITY_LOG_TOPIC",
 		"RABBITMQ_URL",
 		"RABBITMQ_HOST",
+		"AMAZONMQ_URL",
+		"AMAZONMQ_HOST",
+		"AMAZON_MQ_URL",
+		"AMAZON_MQ_HOST",
 		"PUBSUB_PROJECT_ID",
 		"KAFKA_BROKERS",
 	} {

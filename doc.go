@@ -9,6 +9,7 @@
 // # Supported brokers
 //
 //   - RabbitMQ (AMQP)
+//   - Amazon MQ for RabbitMQ (AMQPS)
 //   - Google Cloud Pub/Sub
 //   - Apache Kafka
 //
@@ -27,16 +28,17 @@
 //
 // See the module README for the full environment-variable reference. Key vars:
 //
-//   - MESSAGE_BROKER — rabbitmq | pubsub | kafka (auto-detected when unset)
+//   - MESSAGE_BROKER — rabbitmq | amazonmq | pubsub | kafka (auto-detected when unset)
 //   - ACTIVITY_LOG_QUEUE — topic / queue name (default activity-log.create)
 //   - RABBITMQ_URL or RABBITMQ_HOST — RabbitMQ connection
+//   - AMAZONMQ_URL or AMAZONMQ_HOST — Amazon MQ for RabbitMQ (AMQPS, port 5671)
 //   - PUBSUB_PROJECT_ID — Google Cloud project
 //   - KAFKA_BROKERS — comma-separated Kafka addresses
 //
 // # Caveats
 //
-// RabbitMQ uses Watermill's durable queue config, which names the queue after
-// the topic. Multiple subscribers on the same topic compete for deliveries.
-// NewPublisher and NewSubscriber dial the broker; callers must Close the
-// returned clients when finished.
+// RabbitMQ and Amazon MQ use Watermill's durable queue config, which names the
+// queue after the topic. Multiple subscribers on the same topic compete for
+// deliveries. NewPublisher and NewSubscriber dial the broker; callers must
+// Close the returned clients when finished.
 package activitylogmq

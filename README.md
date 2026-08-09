@@ -15,7 +15,7 @@ This module has no HTTP server and no database. Persistence and query APIs live 
 ## Features
 
 - One-call publish via `messaging.EnqueueActivityLogCreate`
-- Broker-agnostic: **RabbitMQ**, **Google Cloud Pub/Sub**, and **Kafka**
+- Broker-agnostic: **RabbitMQ**, **Amazon MQ** (RabbitMQ/AMQPS), **Google Cloud Pub/Sub**, and **Kafka**
 - Safe degradation when broker env is missing (host service keeps running)
 - Non-blocking audits — publish does not wait on `activity-log-service`
 - Shared `clients.CreateBody` payload across services
@@ -116,9 +116,9 @@ All settings are environment variables. No broker configured → queue disabled 
 
 | Variable | Description |
 |----------|-------------|
-| `MESSAGE_BROKER` | `rabbitmq` (`amqp`/`rabbit`), `pubsub` (`google`/`gcp`), or `kafka`. Auto-detected if unset. |
+| `MESSAGE_BROKER` | `rabbitmq` (`amqp`/`rabbit`), `amazonmq` (`amazon_mq`/`amq`), `pubsub` (`google`/`gcp`), or `kafka`. Auto-detected if unset. |
 
-Auto-detect order when `MESSAGE_BROKER` is unset: RabbitMQ URI present → `PUBSUB_PROJECT_ID` → `KAFKA_BROKERS`.
+Auto-detect order when `MESSAGE_BROKER` is unset: RabbitMQ URI present → `PUBSUB_PROJECT_ID` → `KAFKA_BROKERS` → Amazon MQ URI/host.
 
 ### Topic / queue
 
@@ -141,6 +141,29 @@ Default when none are set: `activity-log.create`.
 | `RABBITMQ_USER` | Default `guest` |
 | `RABBITMQ_PASSWORD` | Default `guest` |
 | `RABBITMQ_VHOST` | Default `/` |
+
+### Amazon MQ (RabbitMQ engine)
+
+Uses the same Watermill AMQP adapter over **AMQPS** (TLS). ActiveMQ is not supported.
+
+| Variable | Description |
+|----------|-------------|
+| `AMAZONMQ_URL` | Full `amqps://` URI (overrides host-based config). Alias: `AMAZON_MQ_URL`. |
+| `AMAZONMQ_HOST` | Broker endpoint hostname. Alias: `AMAZON_MQ_HOST`. |
+| `AMAZONMQ_PORT` | Default `5671` (TLS) or `5672` when TLS is off. Alias: `AMAZON_MQ_PORT`. |
+| `AMAZONMQ_USER` | Broker username. Alias: `AMAZON_MQ_USER`. |
+| `AMAZONMQ_PASSWORD` | Broker password. Alias: `AMAZON_MQ_PASSWORD`. |
+| `AMAZONMQ_VHOST` | Default `/`. Alias: `AMAZON_MQ_VHOST`. |
+| `AMAZONMQ_TLS` | Default `true` (`amqps`). Set `false` for plain `amqp` (local/dev only). Alias: `AMAZON_MQ_TLS`. |
+
+```yaml
+environment:
+  MESSAGE_BROKER: amazonmq
+  AMAZONMQ_HOST: b-xxxxx.mq.us-east-1.amazonaws.com
+  AMAZONMQ_USER: mquser
+  AMAZONMQ_PASSWORD: secret
+  ACTIVITY_LOG_QUEUE: activity-log.create
+```
 
 ### Google Cloud Pub/Sub
 
