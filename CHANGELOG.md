@@ -6,7 +6,6 @@ The format is based on "Keep a Changelog" and follows semantic versioning.
 
 ## [Unreleased]
 
-- Documentation: polish README with Overview, Goals, Tech stack and expanded Configuration.
 
 ## [v0.3.1] - 2026-08-09
 
@@ -14,6 +13,7 @@ The format is based on "Keep a Changelog" and follows semantic versioning.
 - Add CHANGELOG.md with project history and release notes.
 - Documentation: expanded README with Overview, Goals, Tech stack, Installation, and Configuration sections.
 - Support: Add Amazon MQ (AWS MQ) support via the RabbitMQ-compatible AMQPS adapter (RabbitMQ engine on Amazon MQ).
+- Documentation: polish README with Overview, Goals, Tech stack and expanded Configuration.
 
 ### Changed
 - README: reorganised content for clarity; preserved existing usage examples and development targets.
