@@ -12,10 +12,32 @@ EnqueueActivityLogCreate → activity-log.create → handleActivityLogCreate →
 
 This module has no HTTP server and no database. Persistence and query APIs live in `activity-log-service`.
 
+## Overview
+
+pkg-activitylogmq provides a small, dependency-light producer and consumer for application audit events. Producers call a single convenience function to enqueue an audit event; the library handles broker selection and publishing using Watermill. A consumer (also provided) reads messages and forwards them to the central `activity-log-service` over HTTP.
+
+The library is designed to be embedded by any microservice that needs to emit activity logs without coupling that service to the log storage or HTTP latency.
+
+## Goals
+
+- Provide a single-call, non-blocking API for services to publish audit events.
+- Be broker-agnostic: support RabbitMQ / Amazon MQ (AMQPS), Google Cloud Pub/Sub, and Kafka.
+- Fail open for missing broker configuration so services keep running when audit delivery is unavailable.
+- Keep the library small and focused — no servers, no DBs, no schema ownership.
+- Ensure producers and consumers share a common payload type so the log service and producers remain aligned.
+
+## Tech stack
+
+- Language: Go (1.26+)
+- Messaging: Watermill (publisher/subscriber abstraction)
+- Brokers supported: RabbitMQ, Amazon MQ (RabbitMQ engine / AMQPS), Google Cloud Pub/Sub, Kafka
+- Testing: go test, httptest for HTTP fakes, integration tests with RabbitMQ and Kafka (CI)
+- Build / local infra: Docker Compose (for local RabbitMQ/Kafka during integration)
+
 ## Features
 
 - One-call publish via `messaging.EnqueueActivityLogCreate`
-- Broker-agnostic: **RabbitMQ**, **Amazon MQ** (RabbitMQ/AMQPS), **Google Cloud Pub/Sub**, and **Kafka**
+- Broker-agnostic: RabbitMQ, Amazon MQ (RabbitMQ/AMQPS), Google Cloud Pub/Sub, and Kafka
 - Safe degradation when broker env is missing (host service keeps running)
 - Non-blocking audits — publish does not wait on `activity-log-service`
 - Shared `clients.CreateBody` payload across services
@@ -188,7 +210,7 @@ Auth uses standard `GOOGLE_APPLICATION_CREDENTIALS`.
 
 Read once at package init into `clients.ActivityLog`. Consumers without this URL acknowledge and drop messages they receive.
 
-> `messaging.Init` starts a publisher **and** a consumer. Every service that calls `Init` binds the same durable queue `activity-log.create` and they compete for deliveries. See [PRD.md](./PRD.md) §6.
+> `messaging.Init` starts a publisher **and** a consumer. Every service that calls `Init` binds the same durable queue `activity-log.create` and they compete for deliveries. See [PRD.md](./PRD.md) and [PLAN.md](./PLAN.md) for migration and design notes.
 
 ### Typical Compose snippet
 
@@ -224,7 +246,6 @@ make docker-down   # stop Compose services
 
 Unit tests use fakes and `httptest`; a live broker is not required for `make test`.
 CI starts RabbitMQ and Kafka service containers and runs `make test-integration`.
-`make docker-test` still brings up RabbitMQ so broker env vars match a real stack.
 
 ## Docs
 
