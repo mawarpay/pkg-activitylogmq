@@ -13,6 +13,7 @@ The format is based on "Keep a Changelog" and follows semantic versioning.
 ### Added
 - Add CHANGELOG.md with project history and release notes.
 - Documentation: expanded README with Overview, Goals, Tech stack, Installation, and Configuration sections.
+- Support: Add Amazon MQ (AWS MQ) support via the RabbitMQ-compatible AMQPS adapter (RabbitMQ engine on Amazon MQ).
 
 ### Changed
 - README: reorganised content for clarity; preserved existing usage examples and development targets.
